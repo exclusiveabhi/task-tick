@@ -122,7 +122,7 @@ We welcome contributions! Follow these steps to contribute:
 ---
 
 ## **Connect With Us** 🌐  
-- **GitHub:** [Your Profile](https://github.com/exclusiveabhi)  
+- **GitHub:** [Profile](https://github.com/exclusiveabhi)  
 
 --- 
 
