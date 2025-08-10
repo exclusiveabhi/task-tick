@@ -1,5 +1,4 @@
 import { useState, useContext, useEffect } from "react";
-
 import { useNavigate } from "react-router-dom";
 import { Button } from "./components/ui/button";
 import {
@@ -30,19 +29,18 @@ import {
   X,
 } from "lucide-react";
 import { motion } from "framer-motion";
+import { Chip } from "./components/ui/chip";
 import AuthContext from "./context/AuthContext";
 import config from "./config";
 import { format, parseISO } from "date-fns";
 import axios from "axios";
+import { Spinner } from "./components/ui/spinner";
 
 export default function App() {
-  // Helper to get min datetime-local string for today
   const getMinDateTime = () => {
     const now = new Date();
     return now.toISOString().slice(0, 16);
   };
-
-  // Helper to get min time for selected date
   const getDeadlineMin = () => {
     if (!taskDeadline) return getMinDateTime();
     const selectedDate = taskDeadline.slice(0, 10);
@@ -50,7 +48,7 @@ export default function App() {
     if (selectedDate === today) {
       return getMinDateTime();
     }
-    return selectedDate + 'T00:00';
+    return selectedDate + "T00:00";
   };
   const [view, setView] = useState("add-task");
   const [tasks, setTasks] = useState([]);
@@ -65,8 +63,17 @@ export default function App() {
   const [popupMessage, setPopupMessage] = useState("");
   const [popupColor, setPopupColor] = useState("green");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { isAuthenticated, logout } = useContext(AuthContext);
+  const { isAuthenticated, logout, loading } = useContext(AuthContext);
+  const [loadingAddTask, setLoadingAddTask] = useState(false);
+  const [loadingSaveNotif, setLoadingSaveNotif] = useState(false);
+  const [loadingSaveNotifDetails, setLoadingSaveNotifDetails] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!loading && !isAuthenticated) {
+      navigate("/login");
+    }
+  }, [isAuthenticated, loading, navigate]);
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -83,7 +90,10 @@ export default function App() {
             },
           }),
         ]);
-        console.log('DEBUG: fetchUserData - tasksResponse.data:', tasksResponse.data);
+        console.log(
+          "DEBUG: fetchUserData - tasksResponse.data:",
+          tasksResponse.data
+        );
         setTasks(tasksResponse.data);
         if (notificationResponse.data) {
           setNotificationType(notificationResponse.data.notificationType);
@@ -104,6 +114,7 @@ export default function App() {
   }, [isAuthenticated]);
 
   const saveNotificationSettings = async () => {
+    setLoadingSaveNotif(true);
     try {
       await axios.post(
         `${config.backendUrl}/api/notifications`,
@@ -119,18 +130,30 @@ export default function App() {
       );
       setPopupMessage("Notification settings saved!");
       setPopupColor("green");
-      setTimeout(() => setPopupMessage(""), 3000);
+      setTimeout(() => {
+        setPopupMessage("");
+        setLoadingSaveNotif(false);
+      }, 3000);
     } catch (err) {
       console.error("Failed to save notification settings", err);
       setPopupMessage("Failed to save notification settings");
       setPopupColor("red");
-      setTimeout(() => setPopupMessage(""), 3000);
+      setTimeout(() => {
+        setPopupMessage("");
+        setLoadingSaveNotif(false);
+      }, 3000);
     }
   };
 
   const addTask = async () => {
-  console.log('DEBUG: addTask - taskDeadline value:', taskDeadline, 'type:', typeof taskDeadline);
-  if (!taskTitle || !taskDescription || !taskDeadline || !taskPriority) {
+    setLoadingAddTask(true);
+    console.log(
+      "DEBUG: addTask - taskDeadline value:",
+      taskDeadline,
+      "type:",
+      typeof taskDeadline
+    );
+    if (!taskTitle || !taskDescription || !taskDeadline || !taskPriority) {
       setPopupMessage("All fields are required!");
       setPopupColor("red");
       setTimeout(() => setPopupMessage(""), 3000);
@@ -149,19 +172,29 @@ export default function App() {
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         }
       );
-  console.log('DEBUG: addTask - response.data:', response.data);
-  setTasks([...tasks, response.data]);
+      console.log("DEBUG: addTask - response.data:", response.data);
+      setTasks([...tasks, response.data]);
       setTaskTitle("");
       setTaskDescription("");
       setTaskDeadline("");
       setTaskPriority("");
       setPopupMessage("Task added successfully!");
       setPopupColor("green");
-      setTimeout(() => setPopupMessage(""), 3000);
+      setTimeout(() => {
+        setPopupMessage("");
+        setLoadingAddTask(false);
+      }, 3000);
     } catch (err) {
       console.error("Failed to create task:", err);
-      if (err.response && err.response.data && err.response.data.error === 'Notification settings not found') {
-        setPopupMessage("You must save your notification settings before adding a task. Please go to 'Notification Type' and save your settings first.");
+      setLoadingAddTask(false);
+      if (
+        err.response &&
+        err.response.data &&
+        err.response.data.error === "Notification settings not found"
+      ) {
+        setPopupMessage(
+          "You must save your notification settings before adding a task. Please go to 'Notification Type' and save your settings first."
+        );
       } else {
         setPopupMessage("Failed to create task");
       }
@@ -187,13 +220,15 @@ export default function App() {
   };
 
   const saveNotificationDetails = () => {
+    setLoadingSaveNotifDetails(true);
     if (!notificationTime) {
-      setPopupMessage("Notification time is required!");
-      setPopupColor("red");
-      setTimeout(() => setPopupMessage(""), 3000);
+      setTimeout(() => {
+        setPopupMessage("");
+        setLoadingSaveNotifDetails(false);
+      }, 3000);
       return;
     }
-    saveNotificationSettings();
+    saveNotificationSettings().finally(() => setLoadingSaveNotifDetails(false));
   };
 
   const handleMobileNav = (targetView) => {
@@ -221,7 +256,6 @@ export default function App() {
                 <Menu className="h-6 w-6" />
               )}
             </button>
-            {/* Desktop Logout Button */}
             <Button
               variant="outline"
               className="hidden md:inline-flex"
@@ -235,8 +269,6 @@ export default function App() {
           </div>
         </div>
       </header>
-
-      {/* Mobile Sidebar Drawer */}
       {mobileMenuOpen && (
         <motion.div
           initial={{ x: "100%" }}
@@ -245,6 +277,13 @@ export default function App() {
           transition={{ type: "tween", duration: 0.3 }}
           className="fixed top-0 right-0 bottom-0 w-64 bg-white shadow-lg z-30 p-4 md:hidden"
         >
+          <button
+            className="absolute top-4 right-4 text-gray-700 hover:text-black focus:outline-none"
+            onClick={() => setMobileMenuOpen(false)}
+            aria-label="Close sidebar"
+          >
+            <X className="h-6 w-6" />
+          </button>
           <div className="flex flex-col space-y-4 mt-10">
             <Button
               variant="outline"
@@ -270,7 +309,6 @@ export default function App() {
             >
               <Clock className="h-5 w-5 mr-2" /> Notification Duration
             </Button>
-            {/* Mobile Logout Button */}
             <Button
               variant="outline"
               className="mt-4"
@@ -284,10 +322,7 @@ export default function App() {
           </div>
         </motion.div>
       )}
-
-      {/* Main Content */}
       <main className="flex-grow flex overflow-hidden container mx-auto px-4 py-8">
-        {/* Desktop Sidebar */}
         <div className="hidden md:flex w-[23.5%] pr-5 sticky top-4 self-start">
           <div className="flex flex-col space-y-4">
             <Button
@@ -320,8 +355,6 @@ export default function App() {
             </Button>
           </div>
         </div>
-
-        {/* Content Area */}
         <div className="w-full md:w-3/4 h-full overflow-y-auto space-y-8">
           {view === "add-task" && (
             <motion.div
@@ -396,8 +429,8 @@ export default function App() {
                   </div>
                 </CardContent>
                 <CardFooter>
-                  <Button onClick={addTask} className="w-full">
-                    Add Task
+                  <Button onClick={addTask} disabled={loadingAddTask}>
+                    {loadingAddTask ? <Spinner size={20} /> : "Add Task"}
                   </Button>
                 </CardFooter>
               </Card>
@@ -412,23 +445,30 @@ export default function App() {
               className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
             >
               {tasks.map((task, index) => {
-                // Parse deadline as local time (not UTC)
-                // Display deadline as entered (local time string)
                 let deadlineStr = task.deadline;
                 let displayDeadline = "Invalid date";
-                if (typeof deadlineStr === "string" && deadlineStr.length >= 16) {
-                  // Format: YYYY-MM-DDTHH:mm
-                  const [datePart, timePart] = deadlineStr.split('T');
+                if (
+                  typeof deadlineStr === "string" &&
+                  deadlineStr.length >= 16
+                ) {
+                  const [datePart, timePart] = deadlineStr.split("T");
                   if (datePart && timePart) {
-                    const [year, month, day] = datePart.split('-');
-                    const [hour, minute] = timePart.split(':');
-                    // Format to hh:mm AM/PM dd/MM/yy
+                    const [year, month, day] = datePart.split("-");
+                    const [hour, minute] = timePart.split(":");
                     let h = parseInt(hour, 10);
                     const m = minute;
-                    let ampm = 'AM';
-                    if (h >= 12) { ampm = 'PM'; if (h > 12) h -= 12; }
+                    let ampm = "AM";
+                    if (h >= 12) {
+                      ampm = "PM";
+                      if (h > 12) h -= 12;
+                    }
                     if (h === 0) h = 12;
-                    displayDeadline = `${h.toString().padStart(2, '0')}:${m} ${ampm} ${day}/${month}/${year.slice(2)}`;
+                    displayDeadline = `${h
+                      .toString()
+                      .padStart(
+                        2,
+                        "0"
+                      )}:${m} ${ampm} ${day}/${month}/${year.slice(2)}`;
                   }
                 }
                 return (
@@ -448,7 +488,9 @@ export default function App() {
                       <div className="flex flex-col gap-1 sm:gap-2 text-gray-700">
                         <div>
                           <span className="font-bold">Description: </span>
-                          <span className="break-words">{task.description}</span>
+                          <span className="break-words">
+                            {task.description}
+                          </span>
                         </div>
                         <div>
                           <span className="font-bold">Type: </span>
@@ -457,14 +499,17 @@ export default function App() {
                         {notificationType === "email" && (
                           <div>
                             <span className="font-bold">To: </span>
-                            <span className="break-words">{notificationEmail}</span>
+                            <span className="break-words">
+                              {notificationEmail}
+                            </span>
                           </div>
                         )}
                         {notificationType === "whatsapp" && (
                           <div>
-                            
                             <span className="font-bold">WhatsApp: </span>
-                            <span className="break-words">{notificationWhatsApp}</span>
+                            <span className="break-words">
+                              {notificationWhatsApp}
+                            </span>
                           </div>
                         )}
                         <div>
@@ -473,11 +518,19 @@ export default function App() {
                         </div>
                         <div>
                           <span className="font-bold">Timer: </span>
-                          <span>{notificationTime} minutes before deadline</span>
+                          <span>
+                            {notificationTime} minutes before deadline
+                          </span>
                         </div>
                         <div>
                           <span className="font-bold">Priority: </span>
                           <span className="capitalize">{task.priority}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold">Notified: </span>
+                          <Chip color={task.notified ? "green" : "red"}>
+                            {task.notified ? "True" : "False"}
+                          </Chip>
                         </div>
                       </div>
                     </CardContent>
@@ -553,8 +606,15 @@ export default function App() {
                   )}
                 </CardContent>
                 <CardFooter>
-                  <Button onClick={saveNotification} className="w-full">
-                    Save Notification Settings
+                  <Button
+                    onClick={saveNotification}
+                    disabled={loadingSaveNotif}
+                  >
+                    {loadingSaveNotif ? (
+                      <Spinner size={20} />
+                    ) : (
+                      "Save Notification Settings"
+                    )}
                   </Button>
                 </CardFooter>
               </Card>
@@ -590,8 +650,15 @@ export default function App() {
                   </div>
                 </CardContent>
                 <CardFooter>
-                  <Button onClick={saveNotificationDetails} className="w-full">
-                    Save Notification Details
+                  <Button
+                    onClick={saveNotificationDetails}
+                    disabled={loadingSaveNotifDetails}
+                  >
+                    {loadingSaveNotifDetails ? (
+                      <Spinner size={20} />
+                    ) : (
+                      "Save Notification Details"
+                    )}
                   </Button>
                 </CardFooter>
               </Card>
@@ -599,13 +666,12 @@ export default function App() {
           )}
         </div>
       </main>
-
-      {/* Popup Alerts */}
       {popupMessage && (
         <div
           className={`${
             popupColor === "green" ? "bg-green-600" : "bg-red-600"
           } fixed bottom-10 left-1/2 transform -translate-x-1/2 p-4 rounded-md text-white`}
+          onAnimationEnd={() => setLoadingSaveNotifDetails(false)}
         >
           {popupMessage}
         </div>
